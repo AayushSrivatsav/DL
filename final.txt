@@ -1,0 +1,113 @@
+#sanj code
+
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras.preprocessing.text import Tokenizer
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Embedding, SimpleRNN, Dense
+
+# Read the text file
+with open('C:/Users/skava/Downloads/blue_castle.txt', 'r', encoding='utf-8') as file:
+    text = file.read()
+   
+tokenizer = Tokenizer()
+tokenizer.fit_on_texts([text])
+total_words = len(tokenizer.word_index) + 1
+
+input_sequences = []
+for line in text.split('\n'):
+    token_list = tokenizer.texts_to_sequences([line])[0]
+    for i in range(1, len(token_list)):
+        n_gram_sequence = token_list[:i+1]
+        input_sequences.append(n_gram_sequence)
+       
+max_sequence_len = max([len(seq) for seq in input_sequences])
+input_sequences = np.array(pad_sequences(input_sequences, maxlen=max_sequence_len, padding='pre'))
+
+X = input_sequences[:, :-1]
+y = input_sequences[:, -1]
+
+y = np.array(tf.keras.utils.to_categorical(y, num_classes=total_words))
+
+model = Sequential()
+model.add(Embedding(total_words, 100, input_shape=(max_sequence_len-1,)))
+model.add(SimpleRNN(150))  # Changed LSTM to SimpleRNN
+model.add(Dense(total_words, activation='softmax'))
+print(model.summary())
+
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+model.fit(X, y, epochs=2, verbose=1)
+
+seed_text = "I will leave if they"
+next_words = 3
+
+for _ in range(next_words):
+    token_list = tokenizer.texts_to_sequences([seed_text])[0]
+    token_list = pad_sequences([token_list], maxlen=max_sequence_len-1, padding='pre')
+    predicted = np.argmax(model.predict(token_list), axis=-1)
+    output_word = ""
+    for word, index in tokenizer.word_index.items():
+        if index == predicted:
+            output_word = word
+            break
+    seed_text += " " + output_word
+
+print(seed_text)
+
+
+-----------------------------------
+
+
+#sentiment classification
+
+import tensorflow as tf
+from tensorflow.keras.datasets import imdb
+from tensorflow.keras.layers import Embedding, Dense, LSTM
+from tensorflow.keras.losses import BinaryCrossentropy
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+
+# Model configuration
+additional_metrics = ['accuracy']
+batch_size = 128
+embedding_output_dims = 15
+loss_function = BinaryCrossentropy()
+max_sequence_length = 300
+num_distinct_words = 5000
+number_of_epochs = 5
+optimizer = Adam()
+validation_split = 0.20
+verbosity_mode = 1
+
+# Load dataset
+(x_train, y_train), (x_test, y_test) = imdb.load_data(num_words=num_distinct_words)
+print(x_train.shape)
+print(x_test.shape)
+
+# Pad all sequences
+padded_inputs = pad_sequences(x_train, maxlen=max_sequence_length, value = 0.0) # 0.0 because it corresponds with <PAD>
+padded_inputs_test = pad_sequences(x_test, maxlen=max_sequence_length, value = 0.0) # 0.0 because it corresponds with <PAD>
+
+# Define the Keras model
+model = Sequential()
+model.add(Embedding(num_distinct_words, embedding_output_dims, input_length=max_sequence_length))
+model.add(LSTM(10))
+model.add(Dense(1, activation='sigmoid'))
+
+
+# Compile the model
+model.compile(optimizer=optimizer, loss=loss_function, metrics=additional_metrics)
+
+
+# Train the model
+history = model.fit(padded_inputs, y_train, batch_size=batch_size, epochs=number_of_epochs, verbose=verbosity_mode, validation_split=validation_split)
+
+
+# Test the model after training
+test_results = model.evaluate(padded_inputs_test, y_test, verbose=False)
+print(f'Test results - Loss: {test_results[0]} - Accuracy: {100*test_results[1]}%')
+
+--------------
